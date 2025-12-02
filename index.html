@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Melody Master - Chord Transposer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Use Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Custom scrollbar for elegance */
+        body { 
+            font-family: 'Inter', sans-serif;
+            background-color: #1a202c; 
+            color: #e2e8f0; 
+        }
+        .chord-view { 
+            white-space: pre-wrap;
+            font-family: monospace;
+            line-height: 1.8; /* Better readability for chords/lyrics */
+        }
+        .song-line { 
+            margin-bottom: 1rem;
+        }
+
+        /* Style for the actual song chords in the content */
+        .transposed-chord {
+            font-weight: 700;
+            color: #63b3ed; /* Tailwind blue-400 */
+            padding: 2px 4px;
+            border-radius: 4px;
+            background-color: rgba(99, 179, 237, 0.15); /* Light blue background */
+            margin-right: 6px;
+            display: inline-block;
+        }
+
+        /* Customize admin inputs */
+        .admin-input {
+            background-color: #2d3748;
+            /* gray-700 */
+            border: 1px solid #4a5568;
+            /* gray-600 */
+            color: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .admin-input:focus {
+            outline: none;
+            border-color: #63b3ed; /* blue-400 */
+            box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.4);
+        }
+
+        /* Chord chart display styles */
+        .fret-number {
+            font-size: 0.75rem;
+            color: #a0aec0; /* gray-400 */
+            display: block;
+            line-height: 1;
+        }
+        .fret-text {
+            font-size: 1.1rem;
+            line-height: 1.2;
+            font-weight: 700;
+            color: #f6ad55; /* Orange for distinction */
+        }
+        .chart-entry {
+            flex-basis: 120px;
+            /* fixed width for chart card */
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container" class="min-h-screen p-4 sm:p-8">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 id="app-title" class="text-4xl font-extrabold text-white mb-2">Melody Master</h1>
+            <p class="text-xl text-gray-400">Chord Explorer & Transposer</p>
+        </header>
+
+        <!-- Main Content (Song View) -->
+        <main id="main-content" class="max-w-4xl mx-auto bg-gray-800 p-6 rounded-xl shadow-2xl transition duration-300">
+
+            <!-- Search and Controls -->
+            <div id="controls-section" class="mb-6 space-y-4">
+                <input type="text" id="search-bar" oninput="searchSongs()" placeholder="Search songs by title or artist..."
+                       class="w-full admin-input focus:ring-blue-500 focus:border-blue-500">
+                
+                <!-- Song Selector -->
+                <select id="song-selector" onchange="loadSelectedSong()"
+                        class="w-full admin-input appearance-none focus:ring-blue-500 focus:border-blue-500 cursor-pointer">
+                    <!-- Options populated by JS -->
+                </select>
+
+                <!-- Key Transposer -->
+                <div class="flex items-center justify-between bg-gray-700 p-3 rounded-lg shadow-md">
+                    <label class="text-gray-300 font-semibold">Transposed Key:</label>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="changeKey(-1)" class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition duration-150 transform hover:scale-105">
+                            &larr; Down
+                        </button>
+                        <span id="current-key" class="text-2xl font-extrabold text-yellow-300 w-16 text-center transition-colors">C</span>
+                        <button onclick="changeKey(1)" class="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-lg transition duration-150 transform hover:scale-105">
+                            Up &rarr;
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Song Display Area -->
+            <section id="song-display" class="border-t border-gray-700 pt-6">
+                <h2 id="song-title" class="text-3xl font-bold text-white mb-2">Select a Song</h2>
+                <div id="song-artist" class="text-lg text-gray-400 mb-4"></div>
+                <div id="original-key-info" class="text-sm text-gray-500 mb-6"></div>
+
+                <!-- Chords Chart -->
+                <div id="chord-chart-container" class="mb-8 p-4 bg-gray-700 rounded-xl shadow-inner border border-gray-600">
+                    <h3 class="text-xl font-semibold mb-3 text-white border-b border-gray-600 pb-2">Chord Shapes (Fretboard View)</h3>
+                    <div id="chord-chart-display" class="flex flex-wrap gap-4 text-sm justify-center py-2">
+                        <!-- Chords will be rendered here -->
+                        <p class="text-gray-400">Chord shapes will appear here once a song is loaded.</p>
+                    </div>
+                </div>
+
+                <!-- Lyrics and Chords -->
+                <div id="song-content" class="chord-view text-gray-300 text-base">
+                    <p>Use the selector above to load a song.</p>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Admin Access Link -->
+        <div class="text-center mt-12">
+            <button id="admin-toggle-btn" onclick="showAdminLogin()" class="text-sm text-gray-500 hover:text-red-400 transition duration-150">
+                Web Owner: Admin Access
+            </button>
+        </div>
+
+        <!-- Hidden Admin Login Modal -->
+        <div id="admin-login-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center">
+            <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-sm border border-red-500">
+                <h2 class="text-2xl font-bold mb-4 text-red-400">Admin Login</h2>
+                <input type="password" id="admin-password" placeholder="Enter password ('Melody')"
+                       class="w-full mb-4 admin-input focus:ring-red-500 focus:border-red-500">
+                <div class="flex justify-between">
+                    <button onclick="authenticateAdmin()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-150">
+                        Log In
+                    </button>
+                    <button onclick="document.getElementById('admin-login-modal').classList.add('hidden')" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg transition duration-150">
+                        Cancel
+                    </button>
+                </div>
+                <p id="admin-message" class="mt-4 text-sm text-red-400 hidden"></p>
+            </div>
+        </div>
+
+        <!-- Hidden Admin Panel -->
+        <div id="admin-panel" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 overflow-y-auto pt-10 pb-10">
+            <div class="bg-gray-900 p-6 sm:p-10 rounded-xl shadow-2xl w-full max-w-5xl mx-auto border border-red-400">
+                <h2 class="text-3xl font-bold mb-6 text-red-400 border-b border-gray-700 pb-3">Website Configuration (Admin)</h2>
+
+                <!-- General Settings -->
+                <div id="general-settings" class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg">
+                    <h3 class="text-xl font-semibold mb-4 text-white">Global Settings</h3>
+                    <label class="block mb-2 text-gray-300">Web Name (Title):</label>
+                    <input type="text" id="setting-web-name" oninput="saveSettings()" class="w-full mb-4 admin-input">
+                    <label class="block mb-2 text-gray-300">Default Main Chord (e.g., C):</label>
+                    <input type="text" id="setting-main-chord" oninput="saveSettings()" class="w-full mb-4 admin-input uppercase">
+                </div>
+
+                <!-- Song Editor Section -->
+                <div id="song-management" class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg">
+                    <h3 class="text-xl font-semibold mb-4 text-white flex justify-between items-center">
+                        Song Management
+                        <button onclick="newSongForm()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition duration-150 text-sm transform hover:scale-105">
+                            + Add New Song
+                        </button>
+                    </h3>
+                    <select id="edit-song-selector" onchange="loadSongForEditing()"
+                            class="w-full mb-4 admin-input appearance-none cursor-pointer">
+                        <!-- Options populated by JS -->
+                    </select>
+
+                    <div id="song-editor-form" class="space-y-4 border border-gray-700 p-4 rounded-lg hidden">
+                        <input type="hidden" id="editor-song-id">
+                        <label class="block text-gray-300">Title:</label>
+                        <input type="text" id="editor-title" class="w-full admin-input">
+                        <label class="block text-gray-300">Artist:</label>
+                        <input type="text" id="editor-artist" class="w-full admin-input">
+                        <label class="block text-gray-300">Original Key (e.g., C, G#):</label>
+                        <input type="text" id="editor-key" class="w-full admin-input uppercase">
+                        <label class="block text-gray-300">Song Content (Use square brackets for chords: [C] [G/B]):</label>
+                        <textarea id="editor-content" rows="10" class="w-full admin-input font-mono"></textarea>
+                        
+                        <div class="flex space-x-4">
+                            <button onclick="saveSong()" class="flex-grow px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-150">
+                                Save Song
+                            </button>
+                            <button onclick="deleteSong()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition duration-150" id="delete-song-btn">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chord Chart Editor Section -->
+                <div id="chart-management" class="mb-8 p-6 bg-gray-800 rounded-lg shadow-lg">
+                    <h3 class="text-xl font-semibold mb-4 text-white">Chord Chart Management</h3>
+                    <p class="text-gray-400 mb-4">Define standard 6-string fretboard shapes (e.g., 'C': 'x32010').</p>
+                    <div id="chart-editor" class="space-y-4">
+                        <!-- Chart inputs populated by JS -->
+                    </div>
+                    
+                    <div class="mt-6 p-4 border border-gray-700 rounded-lg bg-gray-700">
+                        <h4 class="text-lg font-medium mb-3 text-white">Add New Chord Shape</h4>
+                        <div class="flex flex-wrap gap-4">
+                            <input type="text" id="new-chord-name" placeholder="Chord Name (e.g., F#m)" class="admin-input flex-1 min-w-[150px]">
+                            <input type="text" id="new-chord-frets" placeholder="Frets (e.g., 244222)" class="admin-input flex-1 min-w-[150px]">
+                            <button onclick="addChordChartEntry()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition duration-150 text-sm">
+                                Add Chord
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="saveChordCharts()" class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition duration-150 w-full mt-4">
+                        Save All Charts
+                    </button>
+                </div>
+
+                <button onclick="logoutAdmin()" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg transition duration-150 w-full mt-8">
+                    Close Admin Panel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'MelodyMasterData';
+        const ADMIN_PASSWORD = 'Melody';
+        const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        // --- GLOBAL STATE ---
+        let appData = {};
+        let currentSong = null;
+        let currentKey = 'C';
+        let semitones = 0; // Transposition offset from the song's original key
+
+        // --- DATA INITIALIZATION & LOCALSTORAGE MANAGEMENT ---
+
+        function getInitialData() {
+            // A helper function to create a unique ID
+            const uuid = () => 'id-' + Date.now() + Math.random().toString(16).slice(2);
+            return {
+                settings: {
+                    webName: "Melody Master",
+                    mainChord: "C",
+                    logoUrl: ""
+                },
+                songs: [
+                    {
+                        id: uuid(),
+                        title: 'Yesterday',
+                        artist: 'The Beatles',
+                        originalKey: 'F',
+                        content: `
+[F]Yesterday, all my [Em]troubles seemed so [A7]far away
+[Dm]Now it looks as though they're [Bb]here to stay
+Oh, I [C]believe in yes-ter-[F]day.
+[F]Suddenly, I'm not [Em]half the man I [A7]used to be
+[Dm]There's a shadow hanging [Bb]over me
+Oh, yes-ter-[C]day came suddenly.[F]
+`
+                    },
+                    {
+                        id: uuid(),
+                        title: 'Three Little Birds',
+                        artist: 'Bob Marley',
+                        originalKey: 'A',
+                        content: `
+[A]Don't worry about a [D]thing
+'Cause every little [A]thing gonna be al-[E]right
+[A]Singin' "Don't worry about a [D]thing"
+'Cause every little [A]thing gonna be al-[E]right!
+`
+                    },
+{
+                        id: uuid(),
+                        title: 'Ukulata Nawath',
+                        artist: 'Rookantha gunathilaka',
+                        originalKey: 'D',
+                        content: `
+Chorus
+[D] - [A7] [D]
+[G] [F#m] [A] -
+[G] [Gm] [F#m] [Bm]
+[Em] [A] [D] [A7]
+Inter
+[D] - [Em] - 
+[A7] [D] [A7] [D]
+[D] - [Em] - 
+[A7] [D] [A7] [D]
+Verse
+[G] - [D] -
+[A7] - [D] [D7]
+[G] - [Abdim] [F#m]
+[Em] [A7] [D] [F#m][Fm]
+[Em] [A7] [D] [A7]
+`
+                    }
+                ],
+                chordCharts: {
+                    // Standard G-C-A-E-D-X format (x is muted) for basic chords
+                    C: 'x32010', Am: 'x02210', G: '320003', Em: '022000', D: 'xx0232', A7: 'x02020',
+                    F: '133211', Bb: 'x13331', E: '022100', Cm: 'x35543', Dm: 'xx0231', A: 'x02220', 
+                    D: 'xx0232' // Added D, though it was in the list, ensuring it's present.
+                }
+            };
+        }
+
+        function loadData() {
+            try {
+                const storedData = localStorage.getItem(STORAGE_KEY);
+                appData = storedData ? JSON.parse(storedData) : getInitialData();
+            } catch (e) {
+                console.error("Error loading from localStorage, using default data.", e);
+                appData = getInitialData();
+            }
+            updateAppUI();
+            if (appData.songs.length > 0) {
+                // Load the first song and render the UI
+                selectSong(appData.songs[0]);
+            }
+        }
+
+        function saveData() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+                updateAppUI();
+                // If a song is currently displayed, re-render it to reflect any changes
+                if (currentSong) {
+                    // Rerender the song with the current key (handles case where key or content was changed in admin)
+                    renderSong(); 
+                }
+            } catch (e) {
+                console.error("Error saving to localStorage.", e);
+            }
+        }
+
+        // --- ADMIN LOGIN & UI RENDERING ---
+
+        function showAdminLogin() {
+            document.getElementById('admin-password').value = '';
+            document.getElementById('admin-message').classList.add('hidden');
+            document.getElementById('admin-login-modal').classList.remove('hidden');
+        }
+
+        function authenticateAdmin() {
+            const password = document.getElementById('admin-password').value;
+            const messageEl = document.getElementById('admin-message');
+
+            if (password === ADMIN_PASSWORD) {
+                document.getElementById('admin-login-modal').classList.add('hidden');
+                document.getElementById('admin-panel').classList.remove('hidden');
+                renderAdminPanel();
+                messageEl.classList.add('hidden');
+            } else {
+                messageEl.textContent = 'Incorrect password.';
+                messageEl.classList.remove('hidden');
+            }
+        }
+
+        function logoutAdmin() {
+            document.getElementById('admin-panel').classList.add('hidden');
+        }
+
+        function updateAppUI() {
+            // Update Header and Title
+            document.getElementById('app-title').textContent = appData.settings.webName;
+            document.title = appData.settings.webName + " - Chord Transposer";
+
+            // Update song selector in main view
+            const songSelector = document.getElementById('song-selector');
+            songSelector.innerHTML = '<option value="" disabled selected>Select a Song</option>';
+            appData.songs.forEach(song => {
+                const option = document.createElement('option');
+                option.value = song.id;
+                option.textContent = `${song.title} (${song.artist})`;
+                songSelector.appendChild(option);
+            });
+            // If a song is active, make sure the selector shows it
+            if (currentSong) {
+                songSelector.value = currentSong.id;
+            }
+        }
+        
+        // --- GENERAL SETTINGS MANAGEMENT ---
+
+        function saveSettings() {
+            appData.settings.webName = document.getElementById('setting-web-name').value;
+            appData.settings.mainChord = document.getElementById('setting-main-chord').value.toUpperCase();
+            saveData();
+        }
+
+        // --- CHORD CHART RENDERING ---
+
+        function renderChartEditor() {
+            const chartEditorEl = document.getElementById('chart-editor');
+            chartEditorEl.innerHTML = '';
+
+            Object.keys(appData.chordCharts).sort().forEach(key => {
+                const frets = appData.chordCharts[key];
+                const entryDiv = document.createElement('div');
+                entryDiv.className = 'flex items-center space-x-2 p-3 bg-gray-700 rounded-lg';
+                
+                entryDiv.innerHTML = 
+                    `
+                    <div class="flex-none w-16 text-center text-xl font-bold text-yellow-300">${key}</div>
+                    <input type="text" 
+                           value="${frets}" 
+                           oninput="updateChordFrets(this, '${key}')"
+                           class="flex-grow admin-input font-mono text-center">
+                    <button onclick="deleteChordChartEntry('${key}')" class="flex-none p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                `;
+                chartEditorEl.appendChild(entryDiv);
+            });
+        }
+        
+        function updateChordFrets(inputElement, key) {
+             appData.chordCharts[key] = inputElement.value;
+        // No saveData call here, wait for the Save All Charts button or other save actions
+        }
+
+        function addChordChartEntry() {
+            const nameEl = document.getElementById('new-chord-name');
+            const fretsEl = document.getElementById('new-chord-frets');
+            const name = nameEl.value.toUpperCase().trim();
+            const frets = fretsEl.value.trim();
+            if (name && frets) {
+                appData.chordCharts[name] = frets;
+                saveData();
+                renderChartEditor();
+                nameEl.value = '';
+                fretsEl.value = '';
+            } else {
+                showMessage('chart-management', 'Please enter both chord name and fret positions.', 'text-red-400');
+            }
+        }
+
+        function deleteChordChartEntry(key) {
+            // Use an in-page message box logic instead of confirm()
+            // This is a placeholder for a custom modal confirmation
+            if (window.confirm(`Are you sure you want to delete the chart for ${key}?`)) {
+                delete appData.chordCharts[key];
+                saveData();
+                renderChartEditor();
+            }
+        }
+
+        function saveChordCharts() {
+            saveData();
+            showMessage('chart-management', 'Chord charts saved successfully!', 'text-green-400');
+        }
+
+        // --- SONG EDITOR MANAGEMENT ---
+
+        function renderAdminPanel() {
+            // Load General Settings
+            document.getElementById('setting-web-name').value = appData.settings.webName;
+            document.getElementById('setting-main-chord').value = appData.settings.mainChord;
+
+            // Load songs into edit selector
+            const editSelector = document.getElementById('edit-song-selector');
+            editSelector.innerHTML = '<option value="" disabled selected>-- Select Song to Edit --</option>';
+            appData.songs.forEach(song => {
+                const option = document.createElement('option');
+                option.value = song.id;
+                option.textContent = `${song.title} (${song.artist})`;
+                editSelector.appendChild(option);
+            });
+            // Render chart editor
+            renderChartEditor();
+            // Hide song form initially
+            document.getElementById('song-editor-form').classList.add('hidden');
+        }
+
+        function newSongForm() {
+            document.getElementById('editor-song-id').value = '';
+            document.getElementById('editor-title').value = '';
+            document.getElementById('editor-artist').value = '';
+            document.getElementById('editor-key').value = 'C';
+            document.getElementById('editor-content').value = '[C]New song content here...';
+            document.getElementById('delete-song-btn').classList.add('hidden');
+            document.getElementById('song-editor-form').classList.remove('hidden');
+            document.getElementById('edit-song-selector').value = '';
+            // Deselect in dropdown
+        }
+
+        function loadSongForEditing() {
+            const songId = document.getElementById('edit-song-selector').value;
+            const song = appData.songs.find(s => s.id === songId);
+            
+            if (song) {
+                document.getElementById('editor-song-id').value = song.id;
+                document.getElementById('editor-title').value = song.title;
+                document.getElementById('editor-artist').value = song.artist;
+                document.getElementById('editor-key').value = song.originalKey;
+                document.getElementById('editor-content').value = song.content.trim();
+                document.getElementById('delete-song-btn').classList.remove('hidden');
+                document.getElementById('song-editor-form').classList.remove('hidden');
+            }
+        }
+
+        function saveSong() {
+            const id = document.getElementById('editor-song-id').value;
+            const title = document.getElementById('editor-title').value.trim();
+            const artist = document.getElementById('editor-artist').value.trim();
+            const originalKey = document.getElementById('editor-key').value.toUpperCase().trim();
+            const content = document.getElementById('editor-content').value;
+            if (!title || !originalKey) {
+                showMessage('song-management', 'Title and Original Key are required.', 'text-red-400');
+                return;
+            }
+
+            let songIndex = appData.songs.findIndex(s => s.id === id);
+            if (songIndex === -1) {
+                // New song
+                const newId = 'id-' + Date.now() + Math.random().toString(16).slice(2);
+                const newSong = { id: newId, title, artist, originalKey, content };
+                appData.songs.push(newSong);
+            } else {
+                // Edit existing song
+                appData.songs[songIndex] = { id, title, artist, originalKey, content };
+            }
+
+            saveData();
+            renderAdminPanel();
+            showMessage('song-management', `Song "${title}" saved successfully.`, 'text-green-400');
+        }
+
+        function deleteSong() {
+            const songId = document.getElementById('editor-song-id').value;
+            const songTitle = document.getElementById('editor-title').value;
+
+            // This is a placeholder for a custom modal confirmation
+            if (window.confirm(`Are you sure you want to delete the song: "${songTitle}"?`)) {
+                appData.songs = appData.songs.filter(s => s.id !== songId);
+                // Clear active song if it was the one deleted
+                if (currentSong && currentSong.id === songId) {
+                    currentSong = null;
+                    document.getElementById('song-title').textContent = 'Select a Song';
+                    document.getElementById('song-artist').textContent = '';
+                    document.getElementById('original-key-info').textContent = '';
+                    document.getElementById('song-content').innerHTML = '<p>Use the selector above to load a song.</p>';
+                    document.getElementById('chord-chart-display').innerHTML = '<p class="text-gray-400">Chord shapes will appear here once a song is loaded.</p>';
+                }
+
+                saveData();
+                renderAdminPanel();
+                document.getElementById('song-editor-form').classList.add('hidden');
+                showMessage('song-management', `Song "${songTitle}" deleted.`, 'text-red-400');
+            }
+        }
+        
+        // --- MESSAGE HANDLER (Replaces alerts) ---
+        function showMessage(parentId, message, colorClass) {
+            let messageEl = document.getElementById(parentId + '-message');
+            if (!messageEl) {
+                messageEl = document.createElement('p');
+                messageEl.id = parentId + '-message';
+                messageEl.className = 'mt-4 text-center transition-opacity duration-300';
+                document.getElementById(parentId).appendChild(messageEl);
+            }
+            messageEl.className = `mt-4 text-center transition-opacity duration-300 ${colorClass}`;
+            messageEl.textContent = message;
+            
+            // Auto-hide after 3 seconds
+            clearTimeout(messageEl.timer);
+            messageEl.timer = setTimeout(() => {
+                messageEl.textContent = '';
+            }, 3000);
+        }
+
+        // --- MAIN APP LOGIC ---
+
+        function searchSongs() {
+            const query = document.getElementById('search-bar').value.toLowerCase();
+            const selector = document.getElementById('song-selector');
+            
+            // Clear and repopulate the selector based on the query
+            selector.innerHTML = '<option value="" disabled selected>Select a Song</option>';
+            const filteredSongs = appData.songs.filter(song => 
+                song.title.toLowerCase().includes(query) || 
+                song.artist.toLowerCase().includes(query)
+            );
+            filteredSongs.forEach(song => {
+                const option = document.createElement('option');
+                option.value = song.id;
+                option.textContent = `${song.title} (${song.artist})`;
+                selector.appendChild(option);
+            });
+            // If the currently displayed song is not in the filtered list, clear the view
+            if (currentSong && !filteredSongs.some(s => s.id === currentSong.id)) {
+                currentSong = null;
+                document.getElementById('song-title').textContent = 'Select a Song';
+                document.getElementById('song-artist').textContent = '';
+                document.getElementById('original-key-info').textContent = '';
+                document.getElementById('song-content').innerHTML = '<p>Use the selector above to load a song.</p>';
+                document.getElementById('chord-chart-display').innerHTML = '<p class="text-gray-400">Chord shapes will appear here once a song is loaded.</p>';
+            }
+        }
+
+
+        function loadSelectedSong() {
+            const songId = document.getElementById('song-selector').value;
+            const song = appData.songs.find(s => s.id === songId);
+            if (song) {
+                selectSong(song);
+            }
+        }
+
+        function selectSong(song) {
+            currentSong = song;
+            document.getElementById('song-title').textContent = song.title;
+            document.getElementById('song-artist').textContent = song.artist;
+            // Ensure original key is clean before setting the info
+            const cleanOriginalKey = song.originalKey.toUpperCase().trim();
+            document.getElementById('original-key-info').textContent = `Original Key: ${cleanOriginalKey}`;
+            // Reset transposition to 0 semitones
+            currentKey = cleanOriginalKey;
+            semitones = 0;
+            renderSong();
+        }
+
+        function changeKey(delta) {
+            if (!currentSong) return;
+            
+            // Find the index of the original key in the NOTES array, after standardizing
+            const originalRoot = standardizeToSharp(currentSong.originalKey.trim());
+            const originalNoteIndex = NOTES.indexOf(originalRoot);
+
+            if (originalNoteIndex === -1) {
+                console.error("Original key is not a valid note. Please check the song data.");
+                return;
+            }
+            
+            // Calculate the new transposition semitones
+            semitones = (semitones + delta) % NOTES.length;
+            if (semitones < 0) {
+                semitones += NOTES.length;
+            }
+            
+            // Calculate the new current key for display
+            let newKeyIndex = (originalNoteIndex + semitones) % NOTES.length;
+            currentKey = NOTES[newKeyIndex];
+            
+            renderSong();
+        }
+
+
+        function renderSong() {
+            if (!currentSong) return;
+            document.getElementById('current-key').textContent = currentKey;
+            
+            const contentDiv = document.getElementById('song-content');
+            // Use currentSong.content, trimming extra whitespace
+            const lines = currentSong.content.trim().split('\n');
+            let htmlContent = '';
+            let chordsUsed = new Set();
+            
+            // Regex to find chords: [C], [Am], [G/B], [F#m7], etc.
+            // The parentheses around (.*?) ensure the chord name is captured in match[1]
+            const chordRegex = /\[(.*?)\]/g; 
+            
+            lines.forEach(line => {
+                let transposedLine = line;
+                
+                // Use a standard function replacement (match, p1, offset, string)
+                transposedLine = transposedLine.replace(chordRegex, (match, originalChordContent) => {
+                    const originalChord = originalChordContent.trim(); // Trim the content inside the brackets
+                    if (!originalChord) return match; // If content is empty, return original match
+
+                    const transposedChord = getTransposedChord(originalChord, semitones);
+                    
+                    // Only add the main chord root (before the first slash) to the used set
+                    chordsUsed.add(transposedChord.split('/')[0].trim()); 
+
+                    // Return the HTML span for the transposed chord
+                    return `<span class="transposed-chord">${transposedChord}</span>`;
+                });
+
+                htmlContent += `<div class="song-line">${transposedLine.trim()}</div>`;
+            });
+            
+            contentDiv.innerHTML = htmlContent;
+            renderChordCharts(chordsUsed);
+        }
+        
+        // --- NEW HELPER: Standardize Flat notes to their Sharp equivalent ---
+        function standardizeToSharp(note) {
+            const cleanNote = note.toUpperCase().trim();
+            switch(cleanNote) {
+                // Enharmonic equivalents mapped to the NOTES array
+                case 'DB': return 'C#';
+                case 'EB': return 'D#';
+                case 'FB': return 'E';  // F-flat is E
+                case 'GB': return 'F#';
+                case 'AB': return 'G#';
+                case 'BB': return 'A#';
+                case 'CB': return 'B';  // C-flat is B
+                default: return cleanNote;
+            }
+        }
+        // --- Transposition Logic ---
+
+        function getTransposedChord(originalChord, semitones) {
+            // Trim the chord just in case there's leading/trailing space
+            const trimmedChord = originalChord.trim(); 
+            
+            // 1. Extract the root note (C, C#, D, etc.)
+            // REGEX: Match a letter (A-G) followed by an optional sharp (#) or flat (b)
+            const rootMatch = trimmedChord.match(/^([A-G][#b]?)/i);
+            
+            // If the chord doesn't start with a note letter (e.g., it's just a lyric)
+            if (!rootMatch) return trimmedChord; 
+
+            const rootInput = rootMatch[0]; // e.g., 'Bb'
+            const suffix = trimmedChord.substring(rootInput.length);
+            // e.g., 'm7', 'sus4', '/G'
+
+            // Standardize the root to its sharp equivalent for lookup in the NOTES array
+            const root = standardizeToSharp(rootInput);
+
+            const currentIndex = NOTES.indexOf(root);
+            if (currentIndex === -1) {
+                // Should not happen if standardizeToSharp is comprehensive, but as a fallback:
+                console.warn(`Root note '${root}' not found in NOTES array.`);
+                return trimmedChord; 
+            }
+
+            let newIndex = (currentIndex + semitones) % NOTES.length;
+            if (newIndex < 0) {
+                newIndex += NOTES.length;
+            }
+            const newRoot = NOTES[newIndex];
+
+            let newSuffix = suffix;
+            // 2. Handle bass notes (e.g., C/G)
+            if (suffix.includes('/')) {
+                const parts = suffix.split('/');
+                
+                // Get the chord suffix part (e.g., 'm7') and the bass note part (e.g., 'G')
+                const chordSuffixPart = parts[0].trim();
+                const bassNoteInput = parts[1].trim(); 
+                
+                // Standardize bass note for lookup
+                const bassNote = standardizeToSharp(bassNoteInput);
+                
+                const bassIndex = NOTES.indexOf(bassNote);
+                if (bassIndex !== -1) {
+                    let newBassIndex = (bassIndex + semitones) % NOTES.length;
+                    if (newBassIndex < 0) {
+                        newBassIndex += NOTES.length;
+                    }
+                    // Reassemble: original suffix part + new bass note
+                    newSuffix = chordSuffixPart + '/' + NOTES[newBassIndex];
+                } else {
+                     // If bass note is invalid, keep the original bass note as a fallback
+                     newSuffix = chordSuffixPart + '/' + parts[1];
+                }
+            }
+
+            return newRoot + newSuffix;
+        }
+        
+        // --- CHORD CHART RENDERING ---
+
+        function renderChordCharts(chordsUsed) {
+            const chartDisplay = document.getElementById('chord-chart-display');
+            chartDisplay.innerHTML = '';
+            
+            const chartData = appData.chordCharts;
+            let foundCharts = 0;
+            chordsUsed.forEach(chord => {
+                // Standardize and ignore bass note for chart lookup (C/G uses C chart)
+                const rootChordName = standardizeToSharp(chord.split('/')[0].trim()); 
+                const chartFrets = chartData[rootChordName];
+                
+                if (chartFrets) {
+                    foundCharts++;
+                    const chartHtml = createFretboardChart(rootChordName, chartFrets);
+                    chartDisplay.insertAdjacentHTML('beforeend', chartHtml);
+                }
+            });
+            if (foundCharts === 0) {
+                chartDisplay.innerHTML = '<p class="text-gray-400">No fretboard shapes defined for the current chords. Use Admin panel to add shapes.</p>';
+            }
+        }
+        
+        function createFretboardChart(chordName, fretsString) {
+            // FretsString format: X,3,2,0,1,0 (EADGBe strings)
+            const frets = fretsString.split('');
+            const strings = ['E', 'A', 'D', 'G', 'B', 'e'];
+            
+            let fretHtml = '';
+            // Render the fret numbers (0-5)
+            fretHtml += '<div class="flex justify-between w-full">';
+            frets.forEach((fret, index) => {
+                const displayFret = (fret === 'x' || fret === 'X') ? 'X' : fret;
+                const isZero = (displayFret === '0');
+                const fretClass = isZero ? 'text-green-400' : (displayFret === 'X' ? 'text-red-400' : 'text-yellow-300');
+                fretHtml += `<span class="fret-text ${fretClass}">${displayFret}</span>`;
+            });
+            fretHtml += '</div>';
+            // Render string labels (EADGBe)
+            fretHtml += '<div class="flex justify-between w-full mt-1">';
+            strings.forEach(stringName => {
+                fretHtml += `<span class="fret-number text-gray-500">${stringName}</span>`;
+            });
+            fretHtml += '</div>';
+
+            return `
+                <div class="chart-entry flex flex-col items-center p-3 bg-gray-600 rounded-xl shadow-lg border border-gray-500">
+                    <div class="text-xl font-extrabold text-white mb-2">${chordName}</div>
+                    <div class="w-full">
+                        ${fretHtml}
+                    </div>
+                </div>
+            `;
+        }
+
+
+        // --- INITIALIZATION ---
+        window.onload = loadData;
+    </script>
+</body>
+</html>
